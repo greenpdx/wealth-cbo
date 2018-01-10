@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[1]:
+# In[10]:
 
 
 from __future__ import print_function
@@ -9,143 +9,188 @@ import os
 data_path = ['data']
 
 
-# In[2]:
+# In[186]:
 
 
 import pandas as pd
 import numpy as np
 
+# Read in data https://www.cbo.gov/sites/default/files/114th-congress-2015-2016/reports/51846-supplementaldata.xlsx
+# converted in to csv
 filepath = os.sep.join(data_path + ['wealth.csv'])
 data = pd.read_csv(filepath,index_col=0,header=0)
 
+# Return ndarray 
 X_real = np.linspace(0, 1.0, 10)
 
+# clean extra rows
 s = data[0:9]
 
-t = s.transpose()
-r = np.linspace(0,8 * 3,9).T
-
-#Y_real = np.sin(2 * np.pi * X_real)
-
-
-# In[3]:
+# Make percent dependant 
+# t = s.transpose()
+# Remove year so 0 = 1989
+# r = np.linspace(0,8 * 3,9).T
 
 
-a = s.diff()
-print(s,r)
-print(a)
+# In[187]:
 
 
-# In[4]:
+# Poor 0 -50
+P_data = s.iloc[:,:5].sum(1)
+# Mid 50 - 90
+M_data = s.iloc[:,5:9]
+M_sum = M_data.sum(1)
+# Rest 0 - 90
+R_data = s.iloc[:,:9]
+R_sum = R_data.sum(1)
+# Top 10%
+T_data = s[['90']]
+T_sum = T_data
+print(R_data,R_sum,T_data)
 
 
+# In[188]:
+
+
+# get change in wealth by year
+tdiff = T_data.diff()
+rdiff = R_data.diff()
+
+
+# In[189]:
+
+
+# Setup plot
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 get_ipython().magic('matplotlib inline')
 
 
-# In[5]:
+
+# In[190]:
+
+
+# Get input year
+X_data = np.linspace(1989, 2013, 9)
+# print(X_data)
+
+
+
+# In[191]:
+
+
+# create forecast years
+f_data = np.linspace(1989, 2034, 16)
+# print(f_data)
+
+
+# In[197]:
 
 
 sns.set_style('white')
 sns.set_context('talk')
 sns.set_palette('dark')
 
-ax = a.plot(ls='-', marker='o', markersize='4', label='data')
+ax = plt.axes()
+dx = ax.twinx()
+# absoulet terms
+# bx = s.plot(ls='-', marker='o', markersize='4', label='data')
+
+
+dx.plot(X_data, T_data, marker='*', markersize='15', ls='-', c='r', alpha=1)
+
+#tlbl = dx.plot(f_data, T_pred, marker='^', alpha=.5, c='r', label='Top 10%')
+dx.set_ylabel('Precent of Wealth (Top 10%)', color='r')
+#dx.set_ylim(65,100)
+dx.tick_params(axis='y', labelcolor='r', length=5, color='r')
+
+ax.plot(X_data, R_data,'o', markersize='8', ls='-', alpha=1)
+ax.set_ylabel('Percent of Wealth (90%)', color='b')
+ax.tick_params(axis='y', labelcolor='b', length=5, color='b')
+ax.tick_params(axis='x', length=5)
+ax.minorticks_on()
+ax.tick_params(axis='x', length=3, which='minor' )
+ax.set_xlabel('Year\nData from Congressional Budget Office (cbo)')
+
 
 ax.legend()
-ax.set(xlabel='x data', ylabel='y data');
 
-# Plot of the noisy (sparse)
-bx = s.plot(ls='-', marker='o', markersize='4', label='data')
-# bx = s.set_index('year')['y'].plot(ls='', marker='o', label='data')
-# ax.plot(X_real, Y_real, ls='--', marker='', label='real function')
-# bx.plot(ls='-',marker='x')
-bx.set_ylim([0,100])
-#ax.set_yscale('log')
-# bx.legend()
+# diff plot
+# ax = a.plot(ls='-', marker='o', markersize='4', label='data')
+
 
  
 
 
-# In[6]:
-
-
-P_data = s.iloc[:,:5].sum(1)
-M_data = s.iloc[:,5:9].sum(1)
-R_data = s.iloc[:,:9].sum(1)
-print(P_data, M_data,R_data)
-
-
-# In[10]:
+# In[200]:
 
 
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import LinearRegression
 
 # Setup the polynomial features
-degree = 3
+degree = 5
 pf = PolynomialFeatures(degree)
 lr = LinearRegression(copy_X=True)
 
-# Extract the X- and Y- data from the dataframe 
-q = s.reset_index() # .reset_index()
-Y_data = s[['90']]
-X_tmp= q['year'].values.reshape(-1,1) #q['year']
-X_data = X_tmp
+# for fitting
+X_poly = pf.fit_transform(X_data.reshape(-1,1))
+f_poly = pf.fit_transform(f_data.reshape(-1,1))
 
-f_data = np.array([[1989], [1992], [1995], [1998], [2001], [2004], [2007], [2010], [2013], [2016], [2019], [2021], [2024], [2027], [2030], [2033]])
-f_poly = pf.fit_transform(f_data)
+# Fit the top
+Tlr = lr.fit(X_poly, T_data)
+T_pred = Tlr.predict(f_poly)
 
-X_poly = pf.fit_transform(X_data)
-
-lr = lr.fit(X_poly, Y_data)
-Y_pred = lr.predict(f_poly)
-
+# fit the Poor
 Plr = lr.fit(X_poly, P_data)
 P_pred = Plr.predict(f_poly)
 
-Rlr = lr.fit(X_poly, R_data)
-R_pred = Plr.predict(f_poly)
+# fit 90% of america
+Rlr = lr.fit(X_poly, R_sum)
+R_pred = Rlr.predict(f_poly)
 
-#Mlr = lr.fit(X_poly, M_data)
+# fit the Middle class
+Mlr = lr.fit(X_poly, M_sum)
+M_pred = Mlr.predict(f_poly)
 
-#M_pred = Mlr.predict(f_poly)
-fut = zip(f_data.flatten(),Y_pred.flatten())
-print(list(fut))
+
+fut = zip(f_data.flatten(),T_pred.flatten())
+#print(list(fut))
 
 fut = zip(f_data.flatten(),R_pred.flatten())
-print(list(fut))
+#print(list(fut))
 #print(lr.coef_)
 #print(Y_pred)
 #print(R_pred)
 
 
-# In[8]:
+# In[201]:
 
 
 ax = plt.axes()
 px = ax.twinx()
 
-px.plot(X_data,Y_data, marker='*', markersize='15', ls='', c='k', alpha=1)
-plbl = px.plot(f_data, Y_pred, marker='^', alpha=.5, c='r', label='Top 10%')
+px.plot(X_data,T_data, marker='*', markersize='15', ls='', c='k', alpha=1)
+tlbl = px.plot(f_data, T_pred, marker='^', c='r', label='Top 10%')
 px.set_ylabel('Precent of Wealth (Top 10%)', color='r')
 px.set_ylim(65,100)
 px.tick_params(axis='y', labelcolor='r', length=5, color='r')
 
-ax.plot(X_data,R_data, marker='o', markersize='8', ls='', c='k', alpha=1)
-albl = ax.plot(f_data, R_pred, marker='v', alpha=.5, c='b', label='Everybody else')
+ax.plot(X_data,M_sum, marker='o', markersize='8', ls='', c='k')
+albl = ax.plot(f_data, M_pred, marker='v', c='b', label='50% to 90%')
+#mlbl = ax.plot(f_data, M_pred, marker='v', alpha=.5, c='g')
+plbl = ax.plot(f_data, P_pred, marker='', c='black', label='Bottom 50%')
 ax.set_ylabel('Percent of Wealth (90%)', color='b')
 ax.set_ylim(0,35)
-ax.tick_params(axis='y', labelcolor='b', length=5, color='b')
+ax.tick_params(axis='y', labelcolor='b', length=5, color='grey')
 ax.tick_params(axis='x', length=5)
 ax.minorticks_on()
 ax.tick_params(axis='x', length=3, which='minor' )
 ax.set_xlabel('Year\nData from Congressional Budget Office (cbo)')
 ax.grid(True)
 
-lbl = plbl + albl
+lbl = tlbl + albl + plbl
 la = [i.get_label() for i in lbl]
 plt.legend(lbl, la, loc=6)
 
@@ -156,83 +201,15 @@ plt.savefig("top10wealth.svg")
 # https://www.cbo.gov/publication/51846
 
 
-# In[ ]:
-
-
-# Mute the sklearn warning about regularization
-import warnings
-warnings.filterwarnings('ignore', module='sklearn')
-
-from sklearn.linear_model import Ridge, Lasso
-
-# The ridge regression model
-rr = Ridge(alpha=0.001)
-rr = rr.fit(X_poly, Y_data)
-Y_pred_rr = rr.predict(X_poly)
-
-# The lasso regression model
-lassor = Lasso(alpha=0.0001)
-lassor = lassor.fit(X_poly, Y_data)
-Y_pred_lr = lassor.predict(X_poly)
-
-# The plot of the predicted values
-plt.plot(X_data, Y_data, marker='o', ls='', label='data')
-# plt.plot(X_real, Y_real, ls='--', label='real function')
-plt.plot(f_data, Y_pred, label='linear regression', marker='^', alpha=.5)
-plt.plot(X_poly, Y_pred_rr, label='ridge regression', marker='^', alpha=.5)
-plt.plot(X_poly, Y_pred_lr, label='lasso regression', marker='^', alpha=.5)
-
-plt.legend()
-
-ax = plt.gca()
-ax.set(xlabel='year', ylabel='percent of wealth');
-
-
-# In[ ]:
+# In[183]:
 
 
 # let's look at the absolute value of coefficients for each model
 
 coefficients = pd.DataFrame()
-coefficients['linear regression'] = lr.coef_.ravel()
-coefficients['ridge regression'] = rr.coef_.ravel()
-coefficients['lasso regression'] = lassor.coef_.ravel()
+coefficients['linear regression'] = Tlr.coef_.ravel()
+
 coefficients = coefficients.applymap(abs)
 
 coefficients.describe()  # Huge difference in scale between non-regularized vs regularized regression
-
-
-# In[ ]:
-
-
-colors = sns.color_palette()
-
-# Setup the dual y-axes
-ax1 = plt.axes()
-ax2 = ax1.twinx()
-
-# Plot the linear regression data
-ax1.plot(lr.coef_.ravel(), 
-         color=colors[0], marker='o', label='linear regression')
-
-# Plot the regularization data sets
-ax2.plot(rr.coef_.ravel(), 
-         color=colors[1], marker='o', label='ridge regression')
-
-ax2.plot(lassor.coef_.ravel(), 
-         color=colors[2], marker='o', label='lasso regression')
-
-# Customize axes scales
-ax1.set_ylim(-5e-4, 5e-4)
-ax2.set_ylim(-4e-1, 4e-1)
-
-# Combine the legends
-h1, l1 = ax1.get_legend_handles_labels()
-h2, l2 = ax2.get_legend_handles_labels()
-ax1.legend(h1+h2, l1+l2)
-
-ax1.set(xlabel='coefficients',ylabel='linear regression')
-ax2.set(ylabel='ridge and lasso regression')
-
-ax1.set_xticks(range(len(lr.coef_)));
 
